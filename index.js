@@ -8,16 +8,22 @@ var async = require('async');
 
 function SqsStream(options){
 
-  stream.Readable.apply(this, [{ 'objectMode': true }]);
+  stream.Duplex.apply(this, [{ 'objectMode': true }]);
 
-  this.sqs = new AWS.SQS({region: 'us-west-2'});
+  this.sqs = new AWS.SQS({
+    region: options.region,
+    accessKeyId: options.awsAccessKeyId,
+    secretAccessKey: options.awsSecretAccessKey
+  });
+
   this.queueUrl = options.queueUrl;
   this.idleWait = options.idleWait || 10000;
+  this.deleteMessages = options.deleteMessages;
   this._getMessages();
 
 }
 
-util.inherits(SqsStream, stream.Readable);
+util.inherits(SqsStream, stream.Duplex);
 
 SqsStream.prototype._getMessages = function(){
 
@@ -28,9 +34,7 @@ SqsStream.prototype._getMessages = function(){
   var parameters = {
     QueueUrl: this.queueUrl,
     MaxNumberOfMessages: 10,
-    MessageAttributeNames: [
-      'All',
-    ],
+    MessageAttributeNames: ['All'],
     VisibilityTimeout: 120,
     WaitTimeSeconds: 2
   };
@@ -69,7 +73,10 @@ SqsStream.prototype._pushMessages = function(messages, complete){
         return this._returnMessage(message, complete);
       }
       this.emit('flowing');
-      this._deleteMessage(message, complete);
+      if(this.deleteMessages){
+        return this._deleteMessage(message, complete);
+      }
+      complete();
     }.bind(this),
     function(error){
       if(!error){
@@ -119,6 +126,22 @@ SqsStream.prototype._read = function(size){
     this.paused = false;
     this.emit('reading');
   }
+
+};
+
+SqsStream.prototype._write = function(message, encoding, complete){
+
+  var params = {
+    MessageBody: JSON.stringify(message),
+    QueueUrl: this.queueUrl
+  };
+
+  this.sqs.sendMessage(params, function(error, data){
+    if(error){
+      this.emit('info:error', error);
+    }
+    complete();
+  });
 
 };
 
