@@ -27,8 +27,8 @@ util.inherits(SqsStream, stream.Duplex);
 
 SqsStream.prototype._getMessages = function(){
 
-  if(this.full){
-    return;
+  if(this.bufferFull){
+    return this.on('resume', this._getMessages.bind(this));
   }
 
   var parameters = {
@@ -42,10 +42,10 @@ SqsStream.prototype._getMessages = function(){
   this.sqs.receiveMessage(parameters, function(error, data){
 
     if(error){
-      return this.emit('error', error);
+      this.emit('info:error', error);
     }
 
-    if(!data.Messages || !data.Messages.length){
+    if(!data || !data.Messages || !data.Messages.length){
       return setTimeout(this._getMessages.bind(this), this.idleWait);
     }
 
@@ -57,7 +57,7 @@ SqsStream.prototype._getMessages = function(){
 
 SqsStream.prototype._pushMessages = function(messages, complete){
 
-  async.eachSeries(
+  async.each(
     messages,
     function(message, complete){
       var data;
@@ -66,10 +66,10 @@ SqsStream.prototype._pushMessages = function(messages, complete){
       }
       catch(exception){
         this.emit('info:error', exception);
-        return complete();
+        return this._deleteMessage(message, complete);
       }
-      if(this.full || !this.push(data)){
-        this.full = true;
+      if(this.bufferFull || !this.push(data)){
+        this.bufferFull = true;
         return this._returnMessage(message, complete);
       }
       this.emit('flowing');
@@ -122,7 +122,10 @@ SqsStream.prototype._deleteMessage = function(message, complete){
 
 SqsStream.prototype._read = function(size){
 
-  this.full = false;
+  if(this.bufferFull){
+    this.bufferFull = false;
+    this.emit('resume');
+  }
 
 };
 
