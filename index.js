@@ -122,10 +122,7 @@ SqsStream.prototype._deleteMessage = function(message, complete){
 
 SqsStream.prototype._read = function(size){
 
-  if(this.paused){
-    this.paused = false;
-    this.emit('reading');
-  }
+  this.full = false;
 
 };
 
