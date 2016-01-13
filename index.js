@@ -28,7 +28,7 @@ util.inherits(SqsStream, stream.Duplex);
 SqsStream.prototype._getMessages = function(){
 
   if(this.bufferFull){
-    return this.on('resume', this._getMessages.bind(this));
+    return this.once('resume', this._getMessages.bind(this));
   }
 
   var parameters = {
